@@ -1,0 +1,30 @@
+service: serverless-python
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: python3.8
+  region: sa-east-1
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - s3:*
+      Resource: ["*"]
+
+package:
+  individually: true
+  exclude:
+    - node_modules/**
+    - venv/**
+
+functions:
+  hello:
+    handler: handler.ETA40
+    events:
+      - s3:
+          bucket: bucket-docs-nodejs
+          event: s3:ObjectCreated:*
+          existing: true
+          rules:
+            - prefix: Eta40/ETA40_m_
+            - suffix: .dat
