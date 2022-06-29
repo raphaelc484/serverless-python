@@ -6,6 +6,7 @@ except ImportError:
 import boto3
 import os
 import io
+import time
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
@@ -14,98 +15,123 @@ from typing import List
 
 
 def bacias(event, context):
-    nome = event["Records"][0]["s3"]["object"]["key"]
+    nome = event["Records"][0]["s3"]["object"]["key"].split("/")[0]
 
-    # session = boto3.Session(
-    #     aws_access_key_id=os.environ.get("ACCESS_KEY"),
-    #     aws_secret_access_key=os.environ.get("ACCESS_SECRET"),
-    #     region_name=os.environ.get("REGION"),
-    # )
+    time.sleep(10)
 
-    # s3 = session.resource("s3")
+    dias = 0
+    numero_modelo = 0
 
-    # my_bucket = s3.Bucket("bucket-docs-nodejs")
+    if "Eta40" in nome:
+        nome_arquivo = "ETA40_p"
+        dias = 10
+        numero_modelo = 3
+    else:
+        dias = 14
+        if "Gefs50" in nome:
+            nome_arquivo = "GEFS_p"
+            numero_modelo = 2
+        else:
+            nome_arquivo = "ECMWF_p"
+            numero_modelo = 1
 
-    # arquivos = []
-    # list: List = []
-    # dateList: List = []
-    # precData: List = []
-    # modelo: List = []
-    # bacias: List = []
+    session = boto3.Session(
+        aws_access_key_id=os.environ.get("ACCESS_KEY"),
+        aws_secret_access_key=os.environ.get("ACCESS_SECRET"),
+        region_name=os.environ.get("REGION"),
+    )
 
-    # for my_bucket_object in my_bucket.objects.all():
-    #     if "ETA40_p" in my_bucket_object.key:
-    #         arquivos.append(my_bucket_object.key)
-    #         date_from_files = (
-    #             my_bucket_object.key.split("Eta40_v2/ETA40_p")[1]
-    #             .split(".dat")[0]
-    #             .split("a")[1]
-    #         )
+    s3 = session.resource("s3")
 
-    #         dateFormat = "{}/{}/{}".format(
-    #             date_from_files[:2], date_from_files[2:4], date_from_files[4:6]
-    #         )
+    my_bucket = s3.Bucket("bucket-docs-nodejs")
 
-    #         dateList.append(dateFormat)
+    arquivos = []
+    list: List = []
+    dateList: List = []
+    precData: List = []
+    modelo: List = []
+    bacias: List = []
 
-    #         body = my_bucket_object.get()["Body"].read()
+    for my_bucket_object in my_bucket.objects.all():
+        if (
+            nome_arquivo in my_bucket_object.key
+            and "precipitacao" not in my_bucket_object.key
+        ):
+            arquivos.append(my_bucket_object.key)
+            date_from_files = (
+                my_bucket_object.key.split("{}/{}".format(nome, nome_arquivo))[
+                    1
+                ]
+                .split(".dat")[0]
+                .split("a")[1]
+            )
 
-    #         list.append(
-    #             pd.read_table(
-    #                 io.BytesIO(body),
-    #                 sep="\s+",
-    #                 header=None,
-    #                 names=["lon", "lat", "prec"],
-    #             )
-    #         )
+            dateFormat = "{}/{}/{}".format(
+                date_from_files[:2], date_from_files[2:4], date_from_files[4:6]
+            )
 
-    # for i in range(len(arquivos)):
-    #     list[0].loc[:, dateList[i]] = list[i].loc[:, "prec"]
+            dateList.append(dateFormat)
 
-    # dados = list[0]
+            body = my_bucket_object.get()["Body"].read()
 
-    # sinMap = gpd.read_file("maps/Bacias/SIN/Contorno_Bacias_rev2.shp")
+            list.append(
+                pd.read_table(
+                    io.BytesIO(body),
+                    sep="\s+",
+                    header=None,
+                    names=["lon", "lat", "prec"],
+                )
+            )
 
-    # x = zip(dados.lon, dados.lat)
-    # geometry = [Point(x) for x in zip(dados.lon, dados.lat)]
-    # dateArray = dateList
-    # geo_dados = gpd.GeoDataFrame(dados, crs=sinMap.crs, geometry=geometry)
+    for i in range(len(arquivos)):
+        list[0].loc[:, dateList[i]] = list[i].loc[:, "prec"]
 
-    # modelo.clear()
-    # for i in range(len(sinMap)):
-    #     modelo.append(
-    #         pd.DataFrame(
-    #             geo_dados[geo_dados["geometry"].within(sinMap.iloc[i].geometry)]
-    #         )
-    #     )
+    dados = list[0]
 
-    # precData.clear()
-    # for i in range(len(sinMap)):
-    #     for j in range(len(dateArray)):
-    #         precData.append(modelo[i][dateArray[j]].mean())
+    sinMap = gpd.read_file("maps/Bacias/SIN/Contorno_Bacias_rev2.shp")
 
-    # precData = [precData[i : i + 10] for i in range(0, len(precData), 10)]
+    x = zip(dados.lon, dados.lat)
+    geometry = [Point(x) for x in zip(dados.lon, dados.lat)]
+    dateArray = dateList
+    geo_dados = gpd.GeoDataFrame(dados, crs=sinMap.crs, geometry=geometry)
 
-    # dateArray = [
-    #     (datetime.strptime(dateArray[i], "%d/%m/%y")).strftime("%Y/%m/%d")
-    #     for i in range(len(dateArray))
-    # ]
+    modelo.clear()
+    for i in range(len(sinMap)):
+        modelo.append(
+            pd.DataFrame(
+                geo_dados[geo_dados["geometry"].within(sinMap.iloc[i].geometry)]
+            )
+        )
 
-    # bacias.clear()
-    # for i in range(len(sinMap)):
-    #     df_Modelo = pd.DataFrame(dateArray)
-    #     df_Modelo["1"] = (datetime.today()).strftime("%Y/%m/%d")
-    #     df_Modelo["2"] = 3
-    #     df_Modelo["3"] = precData[i]
-    #     df_Modelo["4"] = sinMap["Nome_Bacia"][i]
-    #     bacias.append(df_Modelo)
+    precData.clear()
+    for i in range(len(sinMap)):
+        for j in range(len(dateArray)):
+            precData.append(modelo[i][dateArray[j]].mean())
 
-    # endData = pd.concat(bacias).reset_index(drop=True)
+    precData = [precData[i : i + dias] for i in range(0, len(precData), dias)]
 
-    # csv_buffer = io.StringIO()
+    dateArray = [
+        (datetime.strptime(dateArray[i], "%d/%m/%y")).strftime("%Y/%m/%d")
+        for i in range(len(dateArray))
+    ]
 
-    # endData.to_csv(csv_buffer, header=False, index=False)
+    bacias.clear()
+    for i in range(len(sinMap)):
+        df_Modelo = pd.DataFrame(dateArray)
+        df_Modelo["1"] = (datetime.today()).strftime("%Y/%m/%d")
+        df_Modelo["2"] = numero_modelo
+        df_Modelo["3"] = precData[i]
+        df_Modelo["4"] = sinMap["Nome_Bacia"][i]
+        bacias.append(df_Modelo)
 
-    # s3.Object("bucket-docs-nodejs", "Eta40_v2/Eta40.csv").put(
-    #     Body=csv_buffer.getvalue()
-    # )
+    endData = pd.concat(bacias).reset_index(drop=True)
+
+    csv_buffer = io.StringIO()
+
+    endData.to_csv(csv_buffer, header=False, index=False)
+
+    s3.Object("bucket-docs-nodejs", "{}/{}.csv".format(nome, nome)).put(
+        Body=csv_buffer.getvalue()
+    )
+
+    print(nome, nome_arquivo, dias, numero_modelo)

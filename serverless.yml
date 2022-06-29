@@ -5,7 +5,8 @@ provider:
   name: aws
   runtime: python3.8
   region: sa-east-1
-  timeout: 60
+  memorySize: 1024
+  timeout: 300
   iamRoleStatements:
     - Effect: "Allow"
       Action:
@@ -33,6 +34,20 @@ functions:
           rules:
             - prefix: Eta40/ETA40_m_
             - suffix: .dat
+      - s3:
+          bucket: bucket-docs-nodejs
+          event: s3:ObjectCreated:*
+          existing: true
+          rules:
+            - prefix: Gefs50/GEFS_m_
+            - suffix: .dat 
+      - s3:
+          bucket: bucket-docs-nodejs
+          event: s3:ObjectCreated:*
+          existing: true
+          rules:
+            - prefix: ECMWF/ECMWF_m_
+            - suffix: .dat 
 
 plugins:
   - serverless-python-requirements
