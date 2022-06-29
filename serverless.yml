@@ -5,6 +5,7 @@ provider:
   name: aws
   runtime: python3.8
   region: sa-east-1
+  timeout: 60
   iamRoleStatements:
     - Effect: "Allow"
       Action:
@@ -14,12 +15,16 @@ provider:
 package:
   individually: true
   exclude:
-    - node_modules/**
-    - venv/**
+    - "**/*"
+  include:
+    - "*.py"
+    - "maps/**"
+    - "pandas"
+    - "geopandas"
 
 functions:
-  hello:
-    handler: handler.ETA40
+  bacias:
+    handler: handler.bacias
     events:
       - s3:
           bucket: bucket-docs-nodejs
@@ -28,3 +33,10 @@ functions:
           rules:
             - prefix: Eta40/ETA40_m_
             - suffix: .dat
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    zip: true
